@@ -95,6 +95,7 @@ export default function Page() {
 
         {resultMessage ? <p className="text-sm text-slate-600 dark:text-slate-300">{resultMessage}</p> : null}
       </div>
+
       <div className="rounded-xl border overflow-hidden bg-white dark:bg-slate-900">
         <table className="w-full text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800">
@@ -123,6 +124,42 @@ export default function Page() {
                 <td>{s.success}</td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="rounded-xl border overflow-hidden bg-white dark:bg-slate-900">
+        <div className="p-3 font-medium border-b">Scrape Results</div>
+        <table className="w-full text-sm">
+          <thead className="bg-slate-50 dark:bg-slate-800">
+            <tr>
+              <th className="p-3 text-left">Title</th>
+              <th className="p-3 text-left">Source</th>
+              <th className="p-3 text-left">Published</th>
+              <th className="p-3 text-left">URL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {scrapedItems.length === 0 ? (
+              <tr>
+                <td className="p-3 text-slate-500" colSpan={4}>
+                  No results yet. Trigger a scrape to view returned leads.
+                </td>
+              </tr>
+            ) : (
+              scrapedItems.map((item, index) => (
+                <tr key={`${item.url}-${index}`} className="border-t align-top">
+                  <td className="p-3">{item.title}</td>
+                  <td className="p-3">{item.source}</td>
+                  <td className="p-3">{new Date(item.published_at).toLocaleString()}</td>
+                  <td className="p-3">
+                    <a href={item.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                      Open
+                    </a>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
