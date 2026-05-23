@@ -1,0 +1,3 @@
+export default function Page() {
+  return <div className="space-y-5"><h1 className="text-3xl font-semibold">Geographic Intelligence</h1><div className="grid lg:grid-cols-3 gap-4"><div className="lg:col-span-2 h-80 rounded-xl border bg-gradient-to-br from-blue-100 to-indigo-200 dark:from-slate-800 dark:to-slate-700 p-4">Map placeholder (heatmap + impact markers)</div><div className="rounded-xl border p-4 bg-white dark:bg-slate-900"><p className="font-medium">Top Regions</p><ul className="mt-3 text-sm space-y-2"><li>Texas · 39 signals</li><li>California · 28 signals</li><li>Florida · 21 signals</li></ul></div></div></div>;
+}

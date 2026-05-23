@@ -1,0 +1,3 @@
+export default function Page() {
+  return <div className="space-y-5"><h1 className="text-3xl font-semibold">Admin Panel</h1><div className="grid md:grid-cols-2 lg:grid-cols-4 gap-3">{["Trigger ingestion","Trigger AI processing","Trigger entity extraction","Trigger scoring"].map((x)=><button key={x} className="rounded-xl border p-4 bg-white dark:bg-slate-900 text-left hover:border-blue-500">{x}</button>)}</div><div className="rounded-xl border p-4 bg-white dark:bg-slate-900"><p className="font-medium">System Health</p><p className="text-sm text-emerald-600 mt-2">API healthy · Queue idle · Scheduler disabled</p></div></div>;
+}
