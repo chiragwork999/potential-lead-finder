@@ -1,6 +1,5 @@
 "use client";
 
-import axios from "axios";
 import { useState } from "react";
 
 type SourceRow = {
@@ -8,14 +7,6 @@ type SourceRow = {
   status: "Active" | "Paused";
   lastRun: string;
   success: string;
-};
-
-type ScrapedItem = {
-  title: string;
-  url: string;
-  source: string;
-  published_at: string;
-  content: string;
 };
 
 const sources: SourceRow[] = [
@@ -29,7 +20,6 @@ export default function Page() {
   const [query, setQuery] = useState("infrastructure projects");
   const [isScraping, setIsScraping] = useState(false);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
-  const [scrapedItems, setScrapedItems] = useState<ScrapedItem[]>([]);
 
   const toggleSource = (sourceName: string) => {
     setSelectedSources((prev) =>
@@ -49,22 +39,29 @@ export default function Page() {
     setResultMessage(null);
 
     try {
-      const response = await axios.post("http://localhost:8000/api/v1/scrape/trigger", {
-        sources: selectedSources,
-        query,
+      const response = await fetch("http://localhost:8000/api/v1/scrape/trigger", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sources: selectedSources,
+          query,
+        }),
       });
 
-      const data = response.data;
-      const items: ScrapedItem[] = Array.isArray(data?.items) ? data.items : [];
-      setScrapedItems(items);
+      if (!response.ok) {
+        throw new Error(`Scrape request failed (${response.status})`);
+      }
+
+      const data = await response.json();
+      const leadCount = data?.count ?? 0;
       setResultMessage(
-        `Scrape completed for ${selectedSources.length} source(s). ${items.length} lead(s) returned.`,
+        `Scrape completed for ${selectedSources.length} source(s). ${leadCount} lead(s) returned.`,
       );
     } catch (error) {
-      const message = axios.isAxiosError(error)
-        ? error.response?.data?.detail || error.message
-        : "An unknown error occurred during scrape.";
-      setScrapedItems([]);
+      const message =
+        error instanceof Error ? error.message : "An unknown error occurred during scrape.";
       setResultMessage(`Unable to complete scrape: ${message}`);
     } finally {
       setIsScraping(false);
