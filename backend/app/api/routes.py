@@ -22,8 +22,6 @@ async def trigger_scrape(payload: ScrapeRequest):
     return await scrape_sources(payload.sources, payload.query)
 
 
-<<<<<<< HEAD
-=======
 @router.post('/nlp/grok/summarize')
 async def grok_summarize(payload: dict):
     title = payload.get("title")
@@ -33,7 +31,6 @@ async def grok_summarize(payload: dict):
     return await GrokClient().summarize_event(title=title, content=content)
 
 
->>>>>>> codex/transform-repository-to-production-grade-app-qvcgkh
 @router.post('/sources/{source_id}/trigger')
 async def trigger_source(source_id: str):
     return run_pipeline_for_source(source_id)
