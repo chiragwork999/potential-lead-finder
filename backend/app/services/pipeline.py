@@ -1,10 +1,10 @@
 from app.schemas.lead import LeadEventOut
-from app.scrapers.sources.google_news import GoogleNewsScraper, SecFilingsScraper, StateRFPScraper
+from app.scrapers.sources.google_news import GoogleNewsScraper, SecFilingsScraper, IndiaTenderScraper
 
 SCRAPERS = {
     "google_news": GoogleNewsScraper(),
     "sec_filings": SecFilingsScraper(),
-    "state_rfp": StateRFPScraper(),
+    "state_rfp": IndiaTenderScraper(),
 }
 
 
