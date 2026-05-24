@@ -1,13 +1,23 @@
 from dataclasses import dataclass
 import logging
 from urllib.parse import quote
-from datetime import datetime
 
 import feedparser
 import httpx
 from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright
+import asyncio
+import sys
 
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(
+        asyncio.WindowsProactorEventLoopPolicy()
+    )
 logger = logging.getLogger(__name__)
+
+import json
+import re
+import html
 
 
 @dataclass
@@ -30,34 +40,94 @@ class GoogleNewsScraper:
     - zoning approvals
     - permits
     """
+    async def fetch_full_article(
+        self,
+        url: str
+    ) -> str:
 
-    async def fetch_full_article(self, url: str) -> str:
-        """
-        Fetch actual article body from source URL
-        """
         try:
-            headers = {
-                "User-Agent": "Mozilla/5.0"
-            }
 
-            async with httpx.AsyncClient(
-                timeout=15,
-                follow_redirects=True
-            ) as client:
-                response = await client.get(url, headers=headers)
+            async with async_playwright() as p:
 
-            soup = BeautifulSoup(response.text, "html.parser")
+                browser = await p.chromium.launch(
+                    headless=True
+                )
 
-            paragraphs = soup.find_all("p")
-            text = " ".join(
-                p.get_text(strip=True)
-                for p in paragraphs
+                page = await browser.new_page(
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/124.0 Safari/537.36"
+                    )
+                )
+
+                # open page
+                await page.goto(
+                    url,
+                    wait_until="networkidle",
+                    timeout=60000
+                )
+
+                # extra wait for lazy-loaded content
+                await page.wait_for_timeout(5000)
+
+                # get FULL rendered HTML
+                html = await page.content()
+
+                await browser.close()
+
+            soup = BeautifulSoup(
+                html,
+                "html.parser"
             )
 
-            return text[:4000]
+            # target your main container
+            main = soup.select_one("main.container")
+
+            # fallback
+            if not main:
+                main = soup.find("body")
+
+            if not main:
+                return ""
+
+            # remove junk
+            for tag in main([
+                "script",
+                "style",
+                "noscript",
+                "svg",
+                "img",
+                "video",
+                "iframe",
+                "header",
+                "footer",
+                "nav",
+                "aside",
+                "form",
+                "button"
+            ]):
+                tag.decompose()
+
+            # extract ALL nested text recursively
+            text = main.get_text(
+                separator=" ",
+                strip=True
+            )
+
+            # cleanup spaces
+            text = re.sub(
+                r"\s+",
+                " ",
+                text
+            ).strip()
+
+            print(text[:5000])
+
+            return text
 
         except Exception as e:
-            logger.warning(f"Could not fetch full article: {url} | {e}")
+            print("SCRAPE ERROR:", e)
             return ""
 
     async def run(self, query: str) -> list[RawArticle]:
@@ -76,6 +146,23 @@ class GoogleNewsScraper:
             f"{query} investment announcement",
         ]
 
+        RELEVANT_KEYWORDS = [
+            "real estate",
+            "project",
+            "infrastructure",
+            "investment",
+            "development",
+            "office",
+            "commercial",
+            "construction",
+            "land",
+            "leasing",
+            "metro",
+            "township",
+            "housing",
+            "property",
+        ]
+
         articles = []
         seen_urls = set()
 
@@ -87,49 +174,59 @@ class GoogleNewsScraper:
             )
 
             try:
-                logger.info(f"RSS: {rss_url}")
-
-                async with httpx.AsyncClient(timeout=20) as client:
-                    response = await client.get(rss_url)
-
-                feed = feedparser.parse(response.text)
+                feed = feedparser.parse(rss_url)
 
                 for entry in feed.entries[:5]:
+
+                    text = (
+                        entry.title
+                        + " "
+                        + entry.get("summary", "")
+                    ).lower()
+
+                    # Filter irrelevant news
+                    if not any(
+                        keyword in text
+                        for keyword in RELEVANT_KEYWORDS
+                    ):
+                        continue
+
+                    # Skip duplicates
                     if entry.link in seen_urls:
                         continue
 
                     seen_urls.add(entry.link)
 
-                    full_content = await self.fetch_full_article(
-                        entry.link
+                    # Fetch full article text
+                    full_article_text = (
+                        await self.fetch_full_article(
+                            entry.link
+                        )
                     )
 
-                    article = RawArticle(
-                        title=entry.title,
-                        url=entry.link,
-                        source="google_news",
-                        published_at=entry.get(
-                            "published",
-                            datetime.utcnow().isoformat()
-                        ),
-                        content=full_content
-                        or entry.get("summary", "")
-                    )
-
-                    articles.append(article)
-
-                    logger.info(
-                        f"Added article: {article.title}"
+                    articles.append(
+                        RawArticle(
+                            title=entry.title,
+                            url=entry.link,
+                            source="google_news",
+                            published_at=entry.get(
+                                "published",
+                                ""
+                            ),
+                            content=(
+                                full_article_text
+                                or entry.get(
+                                    "summary",
+                                    ""
+                                )
+                            ),
+                        )
                     )
 
             except Exception as e:
                 logger.error(
                     f"Google News scrape failed: {e}"
                 )
-
-        logger.info(
-            f"Total Google articles: {len(articles)}"
-        )
 
         return articles[:25]
 
@@ -139,17 +236,22 @@ class SecFilingsScraper:
     SEC filings for expansion/capex signals
     """
 
-    async def run(self, query: str) -> list[RawArticle]:
-        logger.info(f"SEC query: {query}")
+    async def run(
+        self,
+        query: str
+    ) -> list[RawArticle]:
+        logger.info(
+            f"SEC query: {query}"
+        )
 
         headers = {
             "User-Agent":
-                "PotentialLeadFinder/1.0 "
-                "chiragagarwal@example.com"
+            "PotentialLeadFinder chirag@example.com"
         }
 
         url = (
-            "https://data.sec.gov/submissions/"
+            "https://data.sec.gov/"
+            "submissions/"
             "CIK0000320193.json"
         )
 
@@ -161,19 +263,28 @@ class SecFilingsScraper:
                     url,
                     headers=headers
                 )
-
-            data = response.json()
+                data = response.json()
 
             recent = (
-                data.get("filings", {})
-                .get("recent", {})
+                data.get(
+                    "filings",
+                    {}
+                ).get(
+                    "recent",
+                    {}
+                )
             )
 
-            forms = recent.get("form", [])
+            forms = recent.get(
+                "form",
+                []
+            )
+
             dates = recent.get(
                 "filingDate",
                 []
             )
+
             accession = recent.get(
                 "accessionNumber",
                 []
@@ -182,7 +293,10 @@ class SecFilingsScraper:
             filings = []
 
             for i in range(
-                min(5, len(forms))
+                min(
+                    5,
+                    len(forms)
+                )
             ):
                 filing_url = (
                     "https://www.sec.gov/"
@@ -203,6 +317,7 @@ class SecFilingsScraper:
                         published_at=dates[i],
                         content=(
                             "Potential expansion "
+                            "or investment "
                             "signal from SEC filing."
                         ),
                     )
@@ -219,21 +334,26 @@ class SecFilingsScraper:
 
 class IndiaTenderScraper:
     """
-    Future project opportunities
+    Government tender opportunities
     """
 
-    async def run(self, query: str) -> list[RawArticle]:
+    async def run(
+        self,
+        query: str
+    ) -> list[RawArticle]:
         logger.info(
-            f"India Tender query: {query}"
+            f"Tender query: {query}"
         )
 
         return [
             RawArticle(
                 title=(
-                    f"CPPP Tender related "
-                    f"to {query}"
+                    f"CPPP Tender related to "
+                    f"{query}"
                 ),
-                url="https://eprocure.gov.in/",
+                url=(
+                    "https://eprocure.gov.in/"
+                ),
                 source="cppp_tenders",
                 published_at="",
                 content=(
@@ -247,7 +367,9 @@ class IndiaTenderScraper:
                     f"GeM procurement "
                     f"related to {query}"
                 ),
-                url="https://gem.gov.in/",
+                url=(
+                    "https://gem.gov.in/"
+                ),
                 source="gem_portal",
                 published_at="",
                 content=(
@@ -257,22 +379,3 @@ class IndiaTenderScraper:
                 ),
             ),
         ]
-
-
-# -----------------------------------
-# TODO later database integration
-# -----------------------------------
-# save_articles_to_db(articles)
-#
-# from app.db.models import Article
-# session.add(...)
-# session.commit()
-#
-# -----------------------------------
-# TODO NLP pipeline later
-# -----------------------------------
-# extract_entities(article.content)
-# classify_event(article.content)
-# sentiment_analysis(article.content)
-# geo_tagging(article.content)
-# impact_scoring(article.content)

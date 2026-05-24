@@ -51,6 +51,7 @@ def extract_article(url: str) -> dict:
             publish_date = article.publish_date.isoformat()
         else:
             publish_date = str(article.publish_date)
+    print("Teeeext",text)
 
     return {
         "title": (article.title or "").strip(),

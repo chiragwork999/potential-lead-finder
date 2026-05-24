@@ -28,7 +28,7 @@ def _pick_scraper(source: str):
 async def trigger_scrape(payload: ScrapeRequest):
     all_items = []
     errors = []
-
+    print("ppp",payload)
     for source in payload.sources:
         scraper = _pick_scraper(source)
         if not scraper:

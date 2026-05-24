@@ -5,10 +5,21 @@ import spacy
 _NLP = None
 
 
+import spacy
+
+_NLP = None
+
+
 def _get_nlp():
     global _NLP
+
     if _NLP is None:
-        _NLP = spacy.load("en_core_web_sm")
+        try:
+            _NLP = spacy.load("en_core_web_sm")
+        except Exception as e:
+            print("SpaCy model not found:", e)
+            return None
+
     return _NLP
 
 
@@ -33,7 +44,16 @@ def extract_entities(text: str) -> dict:
             "dates": [],
         }
 
-    doc = _get_nlp()(text)
+    nlp = _get_nlp()
+
+    if nlp is None:
+        return {
+            "organizations": [],
+            "locations": [],
+            "money": [],
+        }
+
+    doc = nlp(text)
     entities = {
         "organizations": [],
         "people": [],
